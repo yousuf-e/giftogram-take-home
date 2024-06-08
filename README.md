@@ -1,12 +1,24 @@
 # Giftogram Take Home 
 - Author: Yousuf Elkhoga
-- Time elapsed: 
+- Time elapsed: Sat June 8 2:36 PM ->  
 
 ## TO DO:
 
-- [ ] Define data model
+- [X] Define data model
+- Users: 
+  - user_id
+  - email 
+  - password
+  - first
+  - last
+- Messages:
+  - message_id
+  - sender_user_id FK user_id
+  - receiver_user_id FK user_id
+  - message
+  - epoch
 
-- [ ] Write DDL to populate DB w/ tables and schema
+- [X] Write DDL to populate DB w/ tables and schema
 
 - [ ] Create register endpoint
 
@@ -21,4 +33,11 @@ endpoint
 
 - [ ] SQL dump
 
-- [ ] evaluate security and usability 
+- [ ] evaluate security and usability
+
+
+## Evaluations
+- use a pool instead of connection for the db
+- creating the tables if not exists on connection (not sure how to do that for mysql + docker yet .. will figure out later)
+- more graceful error handling for db connection failure
+- 
