@@ -1,5 +1,5 @@
 import express, { Application, json, urlencoded } from 'express';
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, ErrorRequestHandler } from 'express';
 import { PoolOptions, RowDataPacket } from 'mysql2/promise';
 import { MySQL } from './db';
 
@@ -38,6 +38,7 @@ interface Message extends RowDataPacket {
 let mysql: MySQL | null = null; 
 
 
+// DDL for the db
 (async () => {
   mysql = new MySQL(access);
 
@@ -72,44 +73,8 @@ let mysql: MySQL | null = null;
       FOREIGN KEY (receiver_user_id) REFERENCES users(user_id) ON DELETE CASCADE
     );
   `);
-  // /** Inserting some users */
-  // const [inserted] = await mysql.executeResult(
-  //   'INSERT INTO `users`(`name`) VALUES(?), (?), (?), (?);',
-  //   ['Josh', 'John', 'Marie', 'Gween']
-  // );
 
-  // console.log('Inserted:', inserted.affectedRows);
-
-  /** Getting users */
-  // const [users] = await mysql.queryRows(
-  //   'SELECT * FROM `users` ORDER BY `id` ASC;'
-  // );
-
-  // users.forEach((user: User) => {
-  //   console.log('-----------');
-  //   console.log('id:  ', user.id);
-  //   // console.log('name:', user.name);
-  // });
-
-  // await mysql.connection.end();
 })();
-
-/** Output
- *
- * Inserted: 4
- * -----------
- * id:   4
- * name: Gween
- * -----------
- * id:   2
- * name: John
- * -----------
- * id:   1
- * name: Josh
- * -----------
- * id:   3
- * name: Marie
- */
 
 
 app.get('/',  async (_req: Request, res: Response) => {
@@ -123,40 +88,243 @@ app.get('/',  async (_req: Request, res: Response) => {
 })
 
 
-app.post('/register', async (req: Request, res: Response) => {
-    const { email, password, first_name, last_name } = req.body;
+app.post('/register', async (req: Request, res: Response, next: NextFunction) => {
+  const { email, password, first_name, last_name } = req.body;
 
-    if(mysql !== null){
+    try {
+
+      if (!mysql) throw new Error('No Database connected!');
+
       const [inserted] = await mysql.executeResult(
         'INSERT INTO `users` (`email`, `password`, `first_name`, `last_name`) VALUES (?, ?, ?, ?);',
         [email, password, first_name, last_name]
       );
-      
-      console.log({ "inserted": inserted});
 
-        const [users] = await mysql.queryRows(
-          'SELECT * FROM `users` ORDER BY `user_id` ASC;'
-        );
+      console.log({ "inserted": inserted });
 
-          users.forEach((user: User) => {
-            console.log('-----------');
-            console.log('id:  ', user.user_id);
-            console.log('name:', user.first_name);
-          });
+      const [user, fields] = await mysql.queryRows(
+        'SELECT * FROM `users` WHERE `email` =  ?;',
+        [email]
+      );
 
-        res.send('great success!');
+      res.json({ user });
 
-        } else {
-        res.json({
-            "error_code": 101,
-            "error_title": "Registration Failure",
-            "error_message": "Database not connected yet my bad"
-            })
+    } catch (error) {
+      // advanced error handling here
+      return next({
+        log: `Error occured in registration middleware: ${error}`,
+        status: 400,
+        message: {
+          error: 'Unable to register user.',
+        },
+      });
     }
 
 });
 
 
+app.post('/login', async (req: Request, res: Response, next: NextFunction) => {
+  const { email, password } = req.body;
+
+  try {
+    if (!mysql) throw new Error('No Database connected!');
+
+    // Query to find the user with the provided email
+    const [users, fields] = await mysql.queryRows(
+      'SELECT * FROM `users` WHERE `email` =  ?;',
+      [email]
+    );
+
+    if (users.length === 0) {
+      // If no user found with the provided email
+      return res.status(401).json({
+        error_code: 102,
+        error_title: 'Login Failure',
+        error_message: 'No user found with this email',
+      });
+    }
+
+    const user = users[0];
+
+    // Check if the provided password matches the stored password
+    // Assuming you have a function to compare hashed passwords, e.g., comparePassword
+    const isPasswordValid = user.password === password; // Replace with your password comparison logic
+
+    if (!isPasswordValid) {
+      // If password does not match
+      return res.status(401).json({
+        error_code: 102,
+        error_title: 'Login Failure',
+        error_message: 'Password is invalid',
+      });
+    }
+
+    // If login is successful, respond with user data (excluding sensitive information like password)
+    res.json({
+      user_id: user.user_id,
+      email: user.email,
+      first_name: user.first_name,
+      last_name: user.last_name,
+    });
+
+  } catch (error) {
+    // Advanced error handling here
+    return next({
+      log: `Error occurred in login middleware: ${error}`,
+      status: 500,
+      message: {
+        error: 'An error occurred during login.',
+      },
+    });
+  }
+});
+
+
+app.post('/send_message', async (req: Request, res: Response, next: NextFunction) => {
+  const { sender_user_id, receiver_user_id, message } = req.body;
+
+  try {
+    if (!mysql) throw new Error('No Database connected!');
+
+    // Check if both sender and receiver exist
+    const [sender] = await mysql.queryRows(
+      'SELECT * FROM `users` WHERE `user_id` = ?;',
+      [sender_user_id]
+    );
+
+    const [receiver] = await mysql.queryRows(
+      'SELECT * FROM `users` WHERE `user_id` = ?;',
+      [receiver_user_id]
+    );
+
+    if (sender.length === 0 || receiver.length === 0) {
+      return res.status(400).json({
+        error_code: 103,
+        error_title: 'Message Sending Failure',
+        error_message: 'Sender or receiver does not exist',
+      });
+    }
+
+    // Insert the message into the messages table
+    const [inserted] = await mysql.executeResult(
+      'INSERT INTO `messages` (`sender_user_id`, `receiver_user_id`, `message`) VALUES (?, ?, ?);',
+      [sender_user_id, receiver_user_id, message]
+    );
+
+    console.log({ "inserted": inserted });
+
+    // Respond with success message
+    res.status(200).json({
+      success_code: 200,
+      success_title: 'Message Sent',
+      success_message: 'Message sent successfully',
+    });
+
+  } catch (error) {
+    // Advanced error handling here
+    return next({
+      log: `Error occurred in send_message middleware: ${error}`,
+      status: 500,
+      message: {
+        error: 'An error occurred while sending the message.',
+      },
+    });
+  }
+});
+
+
+app.get('/list_all_users', async (req: Request, res: Response, next: NextFunction) => {
+
+  // GET does not always have a body, but implemented as per spec
+
+  const { requester_user_id } = req.body;
+
+  try {
+    if (!mysql) throw new Error('No Database connected!');
+
+    // Query to get all users except the requester
+    const [users] = await mysql.queryRows(
+      'SELECT user_id, email, first_name, last_name FROM `users` WHERE `user_id` != ?;',
+      [requester_user_id]
+    );
+    console.log({ users });
+    // Respond with the list of users
+    res.json({ users });
+
+  } catch (error) {
+    // Advanced error handling here
+    return next({
+      log: `Error occurred in list_all_users middleware: ${error}`,
+      status: 500,
+      message: {
+        error: 'An error occurred while retrieving the list of users.',
+      },
+    });
+  }
+});
+
+
+app.get('/view_messages', async (req: Request, res: Response, next: NextFunction) => {
+  const { user_id_a, user_id_b } = req.body;
+
+  try {
+    if (!mysql) throw new Error('No Database connected!');
+
+    // Validate query parameters
+    if (!user_id_a || !user_id_b) {
+      return res.status(400).json({
+        error_code: 104,
+        error_title: 'Invalid Request',
+        error_message: 'User IDs must be provided',
+      });
+    }
+
+    // Query to get all messages exchanged between the two users
+    const [messages] = await mysql.queryRows(
+      `SELECT * FROM messages 
+       WHERE (sender_user_id = ? AND receiver_user_id = ?) 
+       OR (sender_user_id = ? AND receiver_user_id = ?)
+       ORDER BY epoch ASC;`,
+      [user_id_a, user_id_b, user_id_b, user_id_a]
+    );
+
+    // Respond with the list of messages
+    res.json({ messages });
+
+  } catch (error) {
+    // Advanced error handling here
+    return next({
+      log: `Error occurred in view_messages middleware: ${error}`,
+      status: 500,
+      message: {
+        error: 'An error occurred while retrieving the messages.',
+      },
+    });
+  }
+});
+
+
+
+// Global error handling middleware
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use(
+  (
+    err: ErrorRequestHandler,
+    _req: Request,
+    res: Response,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _next: NextFunction
+  ) => {
+    const defaultErr = {
+      log: 'Express error handler caught unknown middleware error',
+      status: 400,
+      message: { err: 'An error occurred' },
+    };
+    const errorObj = Object.assign({}, defaultErr, err);
+    console.log(errorObj.log);
+    return res.status(errorObj.status).json(errorObj.message);
+  }
+);
 
 
 
