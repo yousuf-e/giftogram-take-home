@@ -1,8 +1,7 @@
 # Giftogram Take Home 
 - Author: Yousuf Elkhoga
-- Time elapsed: Sat June 8 2:36 PM ->  3:46 PM | Sun June 9 1:45 PM -> 
-  - first session was mostly fiddling around w/ TS and MySQL 
-- 
+- Time elapsed: Sat June 8 2:36 PM ->  3:46 PM | Sun June 9 1:45 PM -> 2:43 PM
+  - first session was mostly fiddling around w/ TS and MySQL, second was writing out all the routes, third was sql dump and optimizing 
 
 ## TO DO:
 

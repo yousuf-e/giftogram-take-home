@@ -43,17 +43,11 @@ let mysql: MySQL | null = null;
   mysql = new MySQL(access);
 
   /** Deleting the `users` table, if it exists */
-  await mysql.queryResult('DROP TABLE IF EXISTS `messages`;');
-  await mysql.queryResult('DROP TABLE IF EXISTS `users`;');
-
-
-  /** Creating a minimal user table */
-  // await mysql.queryResult(
-  //   'CREATE TABLE `users` (`id` INT(11) AUTO_INCREMENT, `name` VARCHAR(50), PRIMARY KEY (`id`));'
-  // );
+  // await mysql.queryResult('DROP TABLE IF EXISTS `messages`;');
+  // await mysql.queryResult('DROP TABLE IF EXISTS `users`;');
 
   await mysql.queryResult(
-    `CREATE TABLE users (
+    `CREATE TABLE IF NOT EXISTS users (
       user_id INT AUTO_INCREMENT PRIMARY KEY,
       email VARCHAR(255) NOT NULL UNIQUE,
       password VARCHAR(255) NOT NULL,
@@ -63,7 +57,7 @@ let mysql: MySQL | null = null;
   `);
 
   await mysql.queryResult(
-    `CREATE TABLE messages (
+    `CREATE TABLE IF NOT EXISTS messages (
       message_id INT AUTO_INCREMENT PRIMARY KEY,
       sender_user_id INT,
       receiver_user_id INT,
