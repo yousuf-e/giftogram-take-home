@@ -1,5 +1,8 @@
 /**
  * The types are explicity for learning purpose
+ * 
+ * NOTEL This db file is provided by the mysql2 library, and it meant to be a starting off point only.
+ *  The functoinality of each method is to be fleshed out further as per the spec of each comment, but as it is unneccessary for this exercise, i chose to use the queries as is. 
  */
 
 import {
